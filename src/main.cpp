@@ -69,6 +69,7 @@ void print_to_display(const char *track_name, const char *album_name, const char
   display.clear();
   display.firstPage();
   display.setFont(u8g_font_6x10);
+  String content = String(track_name) + " " + String(album_name) + " " + String(artist_name);
   do
   {
     display.drawUTF8(10, 10, track_name);
@@ -147,46 +148,6 @@ bool is_valid_response(JsonDocument json)
          json.containsKey("scope");
 }
 
-void save_to_eeprom(int addr, String &data)
-{
-  EEPROM.begin(256);
-  int size = data.length();
-  for (int i = 0; i < size; i++)
-  {
-    EEPROM.write(addr + i, data[i]);
-  }
-  EEPROM.write(addr + size, '\0');
-  EEPROM.commit();
-}
-
-String read_from_eeprom(int addr)
-{
-  char buff[200];
-  int len = 0;
-  char c = EEPROM.read(addr);
-  while (c != '\0' && len < 200)
-  {
-    c = EEPROM.read(c + len);
-    buff[len] = c;
-    len++;
-  }
-  buff[len] = '\0';
-  return String(buff);
-}
-
-void clear_eeprom()
-{
-  for (int i = 0; i < EEPROM.length(); i++)
-  {
-    EEPROM.write(i, 0);
-  }
-}
-
-void access_token_from_eeprom()
-{
-  String token = read_from_eeprom(1); // Access Token address
-}
-
 int str_width(String &str)
 {
   return display.getUTF8Width(str.c_str());
@@ -221,12 +182,11 @@ bool request_access_token(String &code)
       int xInfo = (display.getDisplayWidth() - str_width(info)) / 2;
       int y = display.getDisplayHeight() / 2;
       display.firstPage();
-      do {
+      do
+      {
         display.drawStr(xGreeting, y, greeting.c_str());
         display.drawStr(xInfo, 50, info.c_str());
       } while (display.nextPage());
-
-      save_to_eeprom(1, access_token);
       return true;
     }
   }
@@ -237,10 +197,10 @@ bool request_access_token(String &code)
   return false;
 }
 
-bool request_refresh_token(const String &response)
+bool request_refresh_token(const String &res)
 {
   JsonDocument json_arr;
-  deserializeJson(json_arr, response);
+  deserializeJson(json_arr, res);
   if (json_arr.isNull() || !json_arr.containsKey("refresh_token") || json_arr.size() <= 1)
     return false;
   String refresh_token = json_arr["refresh_token"];
@@ -253,8 +213,9 @@ bool request_refresh_token(const String &response)
   int http_response_code = http.POST(requestBody);
   if (http_response_code == HTTP_CODE_OK)
   {
-    String response = http.getString();
+    response = http.getString();
     token_expire_time = json_arr["expires_in"];
+    access_token = json_arr["access_token"].as<String>();
     expires_counter = millis();
     return true;
   }
@@ -334,7 +295,6 @@ String parseJsonValue(HTTPClient &http, String key)
       index++;
     }
     cutted_str += "...";
-    // return cutted_str;
     ret_str = cutted_str;
   }
   return ret_str;
@@ -343,7 +303,7 @@ String parseJsonValue(HTTPClient &http, String key)
 String get_user_name()
 {
   String user_name = "";
-  
+
   if (!access_token.isEmpty())
   {
     String auth = "Bearer " + access_token;
@@ -378,7 +338,7 @@ void get_currently_playing_track()
 
       // Check if current track is playing
       String is_playing_str = parseJsonValue(http, "is_playing");
-      is_playing = parseJsonValue(http, "is_playing") ? true : false;
+      is_playing = is_playing_str == "true" ? true : false;
 
       track_ptr = track_name.c_str();
       artist_ptr = artist_name.c_str();
@@ -456,9 +416,13 @@ void loop()
       skip_track();
     get_currently_playing_track();
 
-    expires_counter += millis() - expires_counter;
-
-    if ((expires_counter / 1000) >= ((token_expire_time - 10)))
-      request_refresh_token(response); // Request refresh token
+    if ((millis() - expires_counter) / 1000 >= token_expire_time - 60)
+    {
+      if (!request_refresh_token(response))
+      {
+        const char *error_msg = "Couldn't refresh access token";
+        print_to_display(error_msg, display.getDisplayWidth() / 2, display.getDisplayHeight() / 2);
+      }
+    }
   }
 }

@@ -6,7 +6,7 @@ String generate_random_string(int size);
 const String CLIENT_ID = "YOUR CLIENT ID";
 const String CLIENT_SECRET = "YOUR CLIENT SECRET";
 const String SCOPE = "user-read-private user-read-currently-playing user-modify-playback-state";
-const String REDIRECT_URL = "http://YOUR_IP_ADDRESS/callback";
+const String REDIRECT_URL = "http://YOUR IP ADDRESS/callback";
 const String ERROR_PAGE = "<h1>Something went wrong</h1><p>Connection to Spotify Account went wrong. Please retry.</p>";
 const String SUCCESS_SITE = "<h1>Connection successful!</h1><p>You are now connected to your Spotify Account. You can now close this site.</p>";
 const String HOMEPAGE =
