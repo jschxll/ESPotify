@@ -22,6 +22,7 @@ Contributions are welcome! Whether it's bug fixes, feature enhancements, or docu
 
 ## License:
 This project is licensed under the MIT License, allowing for both personal and commercial use with proper attribution.
+The used [U8glib2 library](https://github.com/olikraus/u8g2) is licensed under the 2-Claude BSD License.
 
 ## Disclaimer
 Please note that some features in this program are only supported if you have a Spotify Premium account. So be prepared if a function does not work as expected when you log in with a free Spotify account.
