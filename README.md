@@ -13,7 +13,7 @@ This project utilizes the Spotify API to display the currently playing song on a
 3. Follow the "Getting started" steps
 3. Copy your client IP as well as the client secret into the right field in the index.h file
 3. Connect the ESP8266 to your display and two buttons.
-4. Make sure you downloaded the PlatformIO extension in VSCode if not make so
+4. Make sure you downloaded the PlatformIO extension in VSCode if not, do so
 5. Open the repository with PlatformIO and upload the code
 5. Open the IP Address shown on the OLED display and login to your Spotify account
 
