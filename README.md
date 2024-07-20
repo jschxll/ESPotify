@@ -18,7 +18,7 @@ This project utilizes the Spotify API to display the currently playing song on a
 5. Open the IP Address shown on the OLED display and login to your Spotify account
 
 ## Contributions:
-Contributions are welcome! Whether it's bug fixes, feature enhancements, or documentation improvements, feel free to fork the repository and submit a pull request.
+Contributions are welcome! Whether it's bug fixes, feature enhancements, or documentation improvements, feel free to copy the repository and submit a pull request.
 
 ## License:
 This project is licensed under the MIT License, allowing for both personal and commercial use with proper attribution.
