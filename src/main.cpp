@@ -10,36 +10,157 @@
 #include <Wire.h>
 #include <ArduinoJson.h>
 
-#include <EEPROM.h>
-
 #define SKIP_TRACK_BUTTON 14
 #define PLAYBACK_BEHAVIOUR_BUTTON 12
 
-const char *SSID = "YOUR WIFI SSID";
-const char *PASSWD = "YOUR WIFI PASSWORD";
+class DisplayView
+{
+private:
+  const char *_albumName;
+  const char *_trackName;
+  const char *_artistName;
+  bool _isPlaying;
+  void draw_play_button(U8G2_SH1106_128X64_NONAME_1_SW_I2C &display, int x, int y, int size)
+  {
+    int half_size = size / 2;
+    int x1 = x - half_size;
+    int y1 = y - half_size;
+    int y2 = y + half_size;
+
+    display.drawTriangle(x1, y1, x1, y2, x + half_size, y);
+  }
+  void draw_pause_button(U8G2_SH1106_128X64_NONAME_1_SW_I2C &display, int x, int y, int width, int height)
+  {
+    int barSpacing = width;
+    int half_width = width / 2;
+    int half_height = height / 2;
+
+    display.drawBox(x - barSpacing - half_width, y - half_height, width, height);
+    display.drawBox(x + barSpacing - half_width, y - half_height, width, height);
+  }
+
+public:
+  ~DisplayView()
+  {
+  }
+  void set_album(const char *title)
+  {
+    _albumName = title;
+  }
+  void set_track(const char *trackName)
+  {
+    _trackName = trackName;
+  }
+  void set_artist(const char *artistName)
+  {
+    _artistName = artistName;
+  }
+  void is_playing(bool isPlaying)
+  {
+    _isPlaying = isPlaying;
+  }
+  bool getPlayingState()
+  {
+    return _isPlaying;
+  }
+  const char *get_track()
+  {
+    return _trackName ? _trackName : "";
+  }
+  static void init(U8G2_SH1106_128X64_NONAME_1_SW_I2C &display)
+  {
+    display.clear();
+    display.firstPage();
+    display.setFont(u8g_font_6x10);
+  }
+  void draw_music_view(U8G2_SH1106_128X64_NONAME_1_SW_I2C &display)
+  {
+    init(display);
+    do
+    {
+      if (_albumName)
+        display.drawUTF8(10, 30, _albumName);
+      if (_trackName)
+        display.drawUTF8(10, 10, _trackName);
+      if (_artistName)
+        display.drawUTF8(10, 20, _artistName);
+      if (_isPlaying)
+        draw_play_button(display, display.getDisplayWidth() / 2, 50, 15);
+      else
+        draw_pause_button(display, display.getDisplayWidth() / 2, 50, 5, 15);
+    } while (display.nextPage());
+  }
+  static void draw_message(U8G2_SH1106_128X64_NONAME_1_SW_I2C &display, const char *txt, int x, int y)
+  {
+    init(display);
+    do
+    {
+      display.drawStr(x, y, txt);
+    } while (display.nextPage());
+  }
+};
+
+class DisplayBuilder
+{
+private:
+  DisplayView _displayView;
+
+public:
+  ~DisplayBuilder()
+  {
+  }
+  DisplayBuilder()
+  {
+    _displayView = DisplayView();
+  }
+
+  DisplayBuilder &build_album(const char *title)
+  {
+    _displayView.set_album(title);
+    return *this;
+  }
+
+  DisplayBuilder &build_track(const char *trackName)
+  {
+    _displayView.set_track(trackName);
+    return *this;
+  }
+
+  DisplayBuilder &build_artist(const char *artist)
+  {
+    _displayView.set_artist(artist);
+    return *this;
+  }
+
+  DisplayBuilder &build_play_stop_view(bool isPlaying)
+  {
+    _displayView.is_playing(isPlaying);
+    return *this;
+  }
+
+  DisplayView get_view()
+  {
+    return _displayView;
+  }
+};
+
+const char *SSID = "SSID";
+const char *PASSWD = "WIFI PASSWORD";
 
 ESP8266WebServer server(80);
 std::unique_ptr<BearSSL::WiFiClientSecure> client = std::make_unique<BearSSL::WiFiClientSecure>();
 HTTPClient http;
-String code = "";
 long unsigned int token_expire_time;
 int expires_counter;
-String current_track_data = "";
-String last_track_data = "";
+DisplayView current_view = DisplayView();
+DisplayView previous_view = DisplayView();
 String response;
 
 // true if the access token was requested
 bool got_access_token = false;
 
-// true if current track is playing
-bool is_playing = true;
-
-// millis, to count the current progress of the track
-int current_progress;
-
-const char *track_ptr;
-const char *artist_ptr;
-const char *album_ptr;
+// true = playing; false = pause
+bool lastState = true;
 
 String access_token;
 
@@ -53,30 +174,7 @@ String get_user_name();
 
 // Declaration of the OLED display
 U8G2_SH1106_128X64_NONAME_1_SW_I2C display(U8G2_R0, 5, 4, U8X8_PIN_NONE);
-void print_to_display(const char *txt, int x, int y)
-{
-  display.clear();
-  display.firstPage();
-  do
-  {
-    display.setFont(u8g_font_6x10);
-    display.drawStr(x, y, txt);
-  } while (display.nextPage());
-}
-
-void print_to_display(const char *track_name, const char *album_name, const char *artist_name)
-{
-  display.clear();
-  display.firstPage();
-  display.setFont(u8g_font_6x10);
-  String content = String(track_name) + " " + String(album_name) + " " + String(artist_name);
-  do
-  {
-    display.drawUTF8(10, 10, track_name);
-    display.drawUTF8(10, 20, artist_name);
-    display.drawUTF8(10, 30, album_name);
-  } while (display.nextPage());
-}
+DisplayView view_builder = DisplayView();
 
 void setup_server()
 {
@@ -117,7 +215,6 @@ void setup()
 {
   pinMode(SKIP_TRACK_BUTTON, INPUT);
   pinMode(PLAYBACK_BEHAVIOUR_BUTTON, INPUT);
-  Serial.begin(9600);
   display.begin();
   display.enableUTF8Print();
   client->setInsecure();
@@ -125,7 +222,7 @@ void setup()
   while (WiFi.status() != WL_CONNECTED)
     delay(500);
   String ip_addr = WiFi.localIP().toString();
-  print_to_display(ip_addr.c_str(), (128 - ip_addr.length()) / 4, 32);
+  DisplayView::draw_message(display, ip_addr.c_str(), (128 - ip_addr.length()) / 4, 32);
   setup_server();
 }
 
@@ -191,7 +288,9 @@ bool request_access_token(String &code)
     }
   }
   else
+  {
     handle_not_found();
+  }
 
   http.end();
   return false;
@@ -224,7 +323,7 @@ bool request_refresh_token(const String &res)
   return false;
 }
 
-String parseJsonValue(HTTPClient &http, String key)
+String parse_json_value(HTTPClient &http, String key)
 {
   bool found = false;
   bool searched = true;
@@ -279,7 +378,7 @@ String parseJsonValue(HTTPClient &http, String key)
 
   ret_str = ret_str.substring(1, ret_str.length() - 2);
 
-  // If track info is larger than the display width, a slice of the info is shown on the display
+  // If track info is larger than the display width, a slice of the information is shown on the display
   if (display.getStrWidth(ret_str.c_str()) > display.getDisplayWidth())
   {
     int desired_width = 95;
@@ -313,12 +412,12 @@ String get_user_name()
     int status_code = http.GET();
     if (status_code != HTTP_CODE_OK)
       return "";
-    user_name = parseJsonValue(http, "display_name");
+    user_name = parse_json_value(http, "display_name");
   }
   return user_name;
 }
 
-void get_currently_playing_track()
+void get_currently_playing_track(DisplayView &display_builder)
 {
   if (!access_token.isEmpty())
   {
@@ -330,26 +429,24 @@ void get_currently_playing_track()
     if (status_code == HTTP_CODE_OK)
     {
       // Get track data from the currently playing track
-      String artist_name = parseJsonValue(http, "name");
-      String album_name = parseJsonValue(http, "name");
-      String track_duration = parseJsonValue(http, "duration_ms");
-      String track_name = parseJsonValue(http, "name");
-      String track_progress = parseJsonValue(http, "progress_ms");
+      String artist_name = parse_json_value(http, "name");
+      String album_name = parse_json_value(http, "name");
+      String track_duration = parse_json_value(http, "duration_ms");
+      String track_name = parse_json_value(http, "name");
+      String track_progress = parse_json_value(http, "progress_ms");
 
-      // Check if current track is playing
-      String is_playing_str = parseJsonValue(http, "is_playing");
-      is_playing = is_playing_str == "true" ? true : false;
-
-      track_ptr = track_name.c_str();
-      artist_ptr = artist_name.c_str();
-      album_ptr = album_name.c_str();
-
-      current_track_data = track_name;
-      if (!current_track_data.equals(last_track_data))
+      current_view.set_track(track_name.c_str());
+      if (strcmp(current_view.get_track(), previous_view.get_track()) != 0 || display_builder.getPlayingState() != previous_view.getPlayingState())
       {
-        print_to_display(track_ptr, album_ptr, artist_ptr);
+        current_view = DisplayBuilder()
+                           .build_track(current_view.get_track())
+                           .build_album(album_name.c_str())
+                           .build_artist(artist_name.c_str())
+                           .build_play_stop_view(display_builder.getPlayingState())
+                           .get_view();
+        current_view.draw_music_view(display);
       }
-      last_track_data = current_track_data;
+      previous_view = current_view;
     }
     http.end();
   }
@@ -405,23 +502,49 @@ void loop()
   server.handleClient();
   if (got_access_token)
   {
+    static unsigned long lastDebounceTime = 0;
+    const unsigned long debouncedDelay = 10; // 50
+    static bool lastButtonState = LOW;
     bool playback_behaviour_changed = digitalRead(PLAYBACK_BEHAVIOUR_BUTTON);
-    if (playback_behaviour_changed && !is_playing)
-      resume_playback();
-    if (playback_behaviour_changed && is_playing)
-      pause_playback();
 
+    if (playback_behaviour_changed != lastButtonState)
+      lastDebounceTime = millis();
+
+    if ((millis() - lastDebounceTime) > debouncedDelay)
+    {
+      if (playback_behaviour_changed)
+      {
+        if (lastState)
+        {
+          resume_playback();
+          view_builder.is_playing(false);
+          lastState = false;
+        }
+        else
+        {
+          pause_playback();
+          view_builder.is_playing(true);
+          lastState = true;
+        }
+      }
+    }
+
+    lastButtonState = playback_behaviour_changed;
     bool triggred_skip = digitalRead(SKIP_TRACK_BUTTON);
     if (triggred_skip)
+    {
       skip_track();
-    get_currently_playing_track();
+      view_builder.is_playing(false);
+    }
+
+    get_currently_playing_track(view_builder);
 
     if ((millis() - expires_counter) / 1000 >= token_expire_time - 60)
     {
       if (!request_refresh_token(response))
       {
         const char *error_msg = "Couldn't refresh access token";
-        print_to_display(error_msg, display.getDisplayWidth() / 2, display.getDisplayHeight() / 2);
+        DisplayView::draw_message(display, error_msg, display.getDisplayWidth() / 2, display.getDisplayHeight() / 2);
       }
     }
   }
