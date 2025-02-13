@@ -1,11 +1,7 @@
+![Project Picture](https://github.com/user-attachments/assets/2366d638-4ad2-4988-a81d-b3246a40a90d)
+
 ## Overview:
 This project utilizes the Spotify API to display the currently playing song on an OLED display. Implemented using an ESP8266 microcontroller, it offers a sleek solution for visualizing your music playback. Additionally, the playback can be conveniently controlled using two buttons for skipping and play / pause songs.
-
-## Features:
-1. Real-time display of currently playing song information from Spotify.
-2. Seamless integration with ESP8266 for effortless setup and usage.
-3. User-friendly control with two buttons for playback management.
-5. Expandable functionality for incorporating additional features or enhancements.
 
 ## How to Use:
 1. Clone or download the repository.
@@ -18,7 +14,7 @@ This project utilizes the Spotify API to display the currently playing song on a
 5. Open the IP Address shown on the OLED display and login to your Spotify account
 
 ## Contributions:
-Contributions are welcome! Whether it's bug fixes, feature enhancements, or documentation improvements, feel free to fork the repository and submit a pull request.
+Contributions are welcome! Whether it's bug fixes, feature enhancements, or documentation improvements, feel free to copy the repository and submit a pull request.
 
 ## License:
 This project is licensed under the MIT License, allowing for both personal and commercial use with proper attribution.
